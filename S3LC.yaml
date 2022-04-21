@@ -1,0 +1,21 @@
+
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=45&quest_id=35
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: whiztest11
+      LifecycleConfiguration:
+        Rules:
+          - Id: whiztest
+            Prefix: whiz
+            Status: Enabled
+            ExpirationInDays: 120
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+            ExpiredObjectDeleteMarker: TRUE
+            Transitions:
+              - StorageClass: ONEZONE_IA
+                TransitionInDays: 35
+              - StorageClass: GLACIER
+                TransitionInDays: 90

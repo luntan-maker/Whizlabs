@@ -1,0 +1,76 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=218&quest_id=35
+Resources:
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      # DBClusterIdentifier: test-db
+      MasterUsername: master
+      MasterUserPassword: Whizlabs123
+      # Autoscaling: False
+      PubliclyAccessible: False
+      DBName: proejctdb
+      StorageEncrypted: False
+      DeletionProtection: False
+
+# https://docs.aws.amazon.com/cli/latest/reference/rds/create-db-snapshot.html
+# https://docs.aws.amazon.com/cli/latest/reference/rds/copy-db-snapshot.html
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref MyIP
+      UserData:
+        Fn::Base64: 
+          Fn::Sub:
+            - |
+              #!/bin/bash
+              aws rds create-db-snapshot \
+                --db-instance-identifier ${MyDB}\
+                --db-snapshot-identifier test-snapshot-01
+              aws rds copy-db-snapshot \
+                --source-db-snapshot-identifier rds:test-snapshot-01 \
+                --target-db-snapshot-identifier test-snapshot-encrypted \
+                --kms-key-id ${MyKeys}
+              aws rds restore-db-instance-from-db-snapshot \
+                --db-instance-identifier test-db-encrypted \
+                --db-snapshot-identifier rds:test-snapshot-encrypted
+            - MyDB: !Ref MyDB
+              MyKeys: !Ref MyKey
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MyRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonRDSFullAccess
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+  MyKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Enabled: True
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: my-key
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: arn:aws:iam:${!Ref AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+
+

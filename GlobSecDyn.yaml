@@ -1,0 +1,81 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=40&quest_id=35
+Resources:
+  MyDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: WhizOrderTable
+      AttributeDefinitions:
+        - AttributeName: UserName
+          AttributeType: S
+        - AttributeName: OrderID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: UserName
+          KeyType: HASH
+        - AttributeName: OrderID
+          KeyType: RANGE
+# https://docs.aws.amazon.com/cli/latest/reference/dynamodb/update-item.html
+# https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/getting-started-step-6.html
+# https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LegacyConditionalParameters.ScanFilter.html
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      IamInstanceProfile: !Ref MyIP
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          aws dynamodb update-item \
+            --table-name WhizOrderTable \
+            --key \
+          aws dynamodb put-item \
+            --table-name WhizOrderTable \
+            --item \
+          
+          aws dynamodb update-table \
+            --table-name WhizOrderTable \
+            --attribute-definitions AttributeName=ReturnDate-UserAmount-index,AttributeType=S \
+            --global-secondary-index-updates \
+
+          aws dynamodb scan \
+            --table-name WhizOrderTable \
+            --index-name ReturnDate-UserAmount-index \
+            --scan-filter \
+
+          aws dynamodb query \
+            --table-name WhizOrderTable \
+            --index-name ReturnDate-UserAmount-index \
+            
+          
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 80
+          FromPort: 80
+          CidrIp: 0.0.0.0/0
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSDynamoDBFullAccess
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole

@@ -1,0 +1,173 @@
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: whizlabs_VPC
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: whizlabs_IGW
+  InternetAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+  MySub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: public_subnet
+  MySub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: private_subnet
+  RT1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: public_route
+  RT2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: private_route
+  Route1:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref RT1
+      GatewayId: !Ref MyIGW
+  Route2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RT2
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: whizlabs_securitygroup
+      GroupDescription: security group for multilayered VPC
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 22
+          FromPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          ToPort: 80
+          FromPort: 80
+          CidrIp: 0.0.0.0/0
+  MyNACL:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: whizlabs_VPC
+  # http://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+  MyNACLEntry1:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      NetworkAclId: !Ref MyNACL
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 22
+        To: 22
+  MyNACLEntry2:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      NetworkAclId: !Ref MyNACL
+      Protocol: 1
+      RuleAction: allow
+      RuleNumber: 200
+      CidrBlock: 0.0.0.0/0
+  MyNACLEntry3:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      NetworkAclId: !Ref MyNACL
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 22
+        To: 22
+  MyNACLEntry4:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      NetworkAclId: !Ref MyNACL
+      Protocol: 1
+      RuleAction: allow
+      RuleNumber: 200
+      CidrBlock: 0.0.0.0/0
+  MyNACLEntry5:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      NetworkAclId: !Ref MyNACL
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+  SubnetNetworkAclAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref MyNACL
+      SubnetId: !Ref MySub1
+  SubnetNetworkAclAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref MyNACL
+      SubnetId: !Ref MySub2
+  MyFirstEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0        
+          SubnetId: !Ref MySub1
+      Tags:
+        - Key: Name
+          Value: public_instance
+  MySecondEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref MySub2
+      Tags:
+        - Key: Name
+          Value: private_instance

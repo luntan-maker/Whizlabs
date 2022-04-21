@@ -1,0 +1,64 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=46&quest_id=35
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: whizlabs7577123847772
+
+
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/S3FullAccess
+      RoleName: S3Role
+      Tags:
+        - Key: Name
+          Value: ec2S3role
+  
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: 
+        - !Ref MyRole
+
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref MyIP
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          aws s3 ls
+          touch test.txt
+          aws s3 mv test.txt s3://whizlabs7577123847772
+          touch new.txt smile.txt
+          aws s3 mv new.txt s3://whizlabs7577123847772
+          aws s3 mv smile.txt s3://whizlabs7577123847772
+      Tags:
+        - Key: Name
+          Value: S3EC2server
+  
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0

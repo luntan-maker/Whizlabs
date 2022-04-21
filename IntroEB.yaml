@@ -1,0 +1,10 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=10&quest_id=35
+Resources:
+  MyEBConfig:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties: 
+      ApplicationName: SampleApplication
+      SolutionStackName: 64bit Amazon Linux 2 v3.2.5 running Corretto 11
+      CNAMEPrefix: SampleApplication-env
+
+

@@ -1,0 +1,56 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=78&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo -s
+          yum -y update
+          yum install httpd
+          systemctl start httpd
+          systemctl enable httpd
+          systemctl status httpd
+          cd /var/www/html/
+          echo '<HTML>Hi Whizlabs, I am a public page</HTML>' >> test.html
+          systemctl restart httpd
+      Tags:
+        - Key: Name
+          Value: MyEC2Server
+  
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref MyEC2
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: whizlabs_SG
+      GroupName: whizlabs_SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIpv6: ::/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIpv6: ::/0

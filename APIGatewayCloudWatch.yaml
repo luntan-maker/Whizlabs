@@ -1,0 +1,53 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=112&quest_id=35
+Resources:
+  MyRest:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: Whizlab API
+  MyRes:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt MyRest.RootResourceId
+      PathPart: /
+      RestApiId: !Ref MyRest
+  MyMeth:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !GetAtt MyRest.RootResourceId
+      RestApiId: !Ref MyRest
+      Integration:
+        IntegrationHttpMethod: POST
+        Uri: arn:aws:apigateway:us-east-1:CloudWatchLogs.GetLogsEvent/service_api
+        Type: AWS
+        Credentials: !Ref MyRole
+  MyDep:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      StageName: TestingApi
+      RestApiId: !Ref MyRest
+      StageDescription:
+        MetricsEnabled: True
+        DataTraceEnabled: True
+        CachingEnabled: True
+
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Name
+          Value: APICloudWatchLogs
+      RoleName: CloudWatchLogs
+
+

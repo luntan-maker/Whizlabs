@@ -1,0 +1,112 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=219&quest_id=35
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: export-snapshot-demo
+  MyKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Principal:
+            AWS: arn:aws:iam::{!Ref AWS::AccoundId}:root
+          Action: kms:*
+          Resource: '*'
+      KeySpec: SYMMETRIC_DEFAULT
+  MyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/kmskey_1
+      TargetKeyId: !Ref MyKey
+  MyDBSG:
+    Type: AWS::RDS::DBSecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS
+      DBSecurityGroupIngress:
+        - EC2SecurityGroupId: !Ref MySG2
+          CIDRIP: 0.0.0.0/0
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBInstanceIdentifier: demo-db
+      MasterUsername: whizlabs
+      MasterUserPassword: Whizlabs123
+      DBInstanceClass: db.t3.micro
+      PubliclyAccessible: True
+      DBSecurityGroups:
+        - !Ref MyDBSG
+      DBName: demodb
+  MySG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SG2
+      GroupDescription: SG2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 3306
+          FromPort: 3306
+          CidrIp: 0.0.0.0/0
+  
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      UserData:
+        Fn::Base64: 
+          Fn::Sub: 
+            - |
+              #!/bin/bash
+              aws rds create-db-snapshot \
+                --db-instance-identifier ${MyDB} \
+                --db-snapshot-identifier demo-db-snapshot
+              aws rds start-export-task \
+                --export-task-identifier my-s3-export \
+                --source-arn arn:aws:rds:${AWS::Region}:${AWS::AccountId}:snapshot:demo-db-snapshot \
+                --s3-bucket-name ${MyBucket} \
+                --iam-role-arn ${MyRole} \
+                --kms-key-id ${MyKey}
+            - MyDB: !Ref MyDB
+              MyBucket: !Ref MyBucket
+              MyRole: !Ref MyRole
+              MyKey: !Ref MyKey
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonRDSFullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess

@@ -1,0 +1,91 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=34&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      Tags:
+        - Key: Name
+          Value: MyEC2Server
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  MyTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: MyServerMonitor
+      DisplayName: MyServerMonitor
+  MySub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: myemail@gmail.com
+      TopicArn: !Ref MyTopic
+  MyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: MyEC2StateChangeEvent
+      Name: MyEC2StateChangeEvent
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - EC2 Instance State-change Notification
+      Targets:
+        - Arn: !Ref MyTopic
+          Id: MyTopicTarget
+      
+
+  PubPrivateVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: True
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref PubPrivateVPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+  NatPublicIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc

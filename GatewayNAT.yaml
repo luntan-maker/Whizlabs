@@ -1,0 +1,102 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=35&quest_id=35
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: MyVPC
+  PubSub:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: MyPublicSubnet
+  PrivSub:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: MyPrivateSubnet
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyIGW
+  MyIGWAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+  PubRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+  GW2RT:
+    Type: AWS::EC2::GatewayRouteTableAssociation
+    Properties:
+      GatewayId: !Ref MyIGW
+      RouteTableId: !Ref PubRT
+  Sub2RT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PubRT
+      SubnetId: !Ref PubSub
+  MyPubEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref PubSub
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      Tags:
+        - Key: Name
+          Value: MyPublicEC2Server
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MyEC2Server_SG
+      GroupDescription: Security Group to allow traffic to EC2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 22
+          FromPort: 22
+          CidrIp: 0.0.0.0/0
+  MyPrivEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref PrivSub
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      Tags:
+        - Key: Name
+          Value: MyPrivateEC2Server
+  MyNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !Ref MyEIP
+      SubnetId: !Ref PubSub
+      ConnectivityType: public
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  NatRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref MyNAT
+      RouteTableId: !Ref PubRT

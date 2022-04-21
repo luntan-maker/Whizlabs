@@ -1,0 +1,75 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=39&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: 'true'
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash -ex
+          yum install mysql -y
+      Tags:
+        - Key: Name
+          Value: MyRdsEc2server
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MyEc2server-SG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  MySG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: rds-maz-SG
+      GroupDescription: Security Group fro RDS aurora
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+  MyDBSG:
+    Type: AWS::RDS::DBSecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS Aurora
+      Tags:
+        - Key: Name
+          Value: rds-maz-SG
+      DBSecurityGroupIngress:
+        - EC2SecurityGroupName: !Ref MySG2 
+          CIDRIP: 0.0.0.0/0
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref MyDBCluster
+      DBInstanceClass: db.t3.small
+      DBSecurityGroups:
+        - !Ref MyDBSG
+  MyReadDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref MyDBCluster
+      DBInstanceClass: db.t3.small
+      DBSecurityGroups:
+        - !Ref MyDBSG
+      SourceDBInstanceIdentifier: !Ref MyDB
+      SourceRegion: !Ref AWS::Region
+  MyDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      DBClusterIdentifier: MyAuroraCluster
+      MasterUsername: WhizlabsAdmin
+      MasterUserPassword: Whizlabs123
+      StorageEncrypted: False

@@ -1,0 +1,107 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=31&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref MyPublicSubnet
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Aurora_lab_sg
+      GroupDescription: MySSecurity group for RDS Aurora
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBInstanceClass: db.t3.small
+      MultiAZ: False
+      DBName: MyDB
+      DBClusterIdentifier: !Ref MyDBCluster
+  MyDBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      MasterUsername: WhizlabsAdmin
+      MasterUserPassword: Whizlabs123
+      DatabaseName: MyDB
+      StorageEncrypted: False
+      DeletionProtection: False
+      VpcSecurityGroupIds:
+        - !Ref MySG
+
+
+# Networking
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+  MyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref MyVPC
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  MyConnIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+  MyAssocRT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPublicSubnet
+      RouteTableId: !Ref MyRT
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      # DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+      RouteTableId: !Ref MyRT
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref MyPublicSubnet
+      AllocationId: !GetAtt MyEIP.AllocationId
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  MyAssocEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MyEC2
+  MyNacl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref MyVPC
+  MyAssocNacl:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref MyNacl
+      SubnetId: !Ref MyPublicSubnet
+

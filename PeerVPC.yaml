@@ -1,0 +1,181 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=232&quest_id=35
+Resources:
+  FirstVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: First_VPC
+  PubSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/25
+      VpcId: !Ref FirstVPC
+      Tags:
+        - Key: Name
+          Value: Public_subnet_first_VPC
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW
+  MyInternetConnection:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref FirstVPC
+      InternetGatewayId: !Ref MyIGW
+  PubRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FirstVPC
+      Tags:
+        - Key: Name
+          Value: PublicRT
+  PubRTSubAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PubRT
+      SubnetId: !Ref PubSubnet
+  PubRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+      RouteTableId: !Ref PubRT
+  FirstEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      NetworkInterfaces:
+        - SubnetId: !Ref PubSubnet
+          AssociatePublicIpAddress: True
+          DeviceIndex: 0 
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><h1> Welcome to Whizlabs Public Server</h1><html>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: First_VPCs_EC2
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Public_EC2_SG
+      GroupDescription: Security group for public EC2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  SecondVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 20.0.0.0/24
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: Second_VPC
+  PrivSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecondVPC
+      CidrBlock: 20.0.0.0/25
+      Tags:
+        - Key: Name
+          Value: Private_subnet_second_VPC
+  SecondEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG2.GroupId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: False
+          SubnetId: !Ref PrivSubnet
+          DeviceIndex: 0
+      Tags:
+        - Key: Name
+          Value: Second_VPCs_EC2
+  MySG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Private_EC2_SG
+      GroupDescription: Security Group fro private EC2
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  MyTransGate:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: TG for Peering two VPCs
+      Tags:
+        - Key: Name
+          Value: DemoTG
+  TransAttach1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - !Ref PubSubnet
+      VpcId: !Ref FirstVPC
+      TransitGatewayId: !Ref MyTransGate
+      Tags:
+        - Key: Name
+          Value: First_VPCs_TGA
+  TransAttach2:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - !Ref PrivSubnet
+      VpcId: !Ref SecondVPC
+      TransitGatewayId: !Ref MyTransGate
+      Tags:
+        - Key: Name
+          Value: Second_VPC
+  # TGRT:
+  #   Type: AWS::EC2::TransitGatewayRouteTable
+  #   Properties:
+  #     TransitGatewayId: !Ref MyTransGate
+  # TGR1:
+  #   Type: AWS::EC2::TransitGatewayRoute
+  #   Properties:
+  #     TransitGatewayRouteTableId: !Ref TGRT
+  #     DestinationCidrBlock: 0.0.0.0/0
+  Route1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PubRT
+      TransitGatewayId: !Ref MyTransGate
+      DestinationCidrBlock: 20.0.0.0/24
+  Route2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: default-routetable #https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-route-table-vpc/
+      DestinationCidrBlock: 10.0.0.0/24
+      TransitGatewayId: !Ref MyTransGate
+
+      
+

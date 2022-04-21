@@ -1,0 +1,93 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=182&quest_id=35
+Resources:
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: RDS_lab_sg
+      GroupDescription: Security group for RDS instance
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 3306
+          FromPort: 3306
+          CidrIp: 0.0.0.0/0
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Lambda_RDS_Role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Name
+          Value: Lambda_RDS_Access
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBInstanceIdentifier: mydatabaseinstance
+      MasterUsername: mydatabaseuser
+      MasterUserPassword: mydatabasepassword
+      DBInstanceClass: db.t2.micro
+      StorageType: gp2
+      PubliclyAccessible: True
+      VPCSecurityGroups:
+        - !Ref MySG
+      DBName: mydatabase
+  MyFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.8
+      Role: !Ref MyRole
+      Code:
+        ZipFile: |
+          import json
+          import pymysql
+
+
+          RDS_endpoint = "myrdsinstance.cdegnvsebaim.us-east-1.rds.amazonaws.com"
+          UserName = "mydatabaseuser"
+          Password = "mydatabasepassword"
+          DatabaseName = "StudentDB"
+
+          connectionString = pymysql.connect(RDS_endpoint, user= UserName, passwd= Password, db= DatabaseName)
+
+          def lambda_handler(event, context):
+              header = []
+              row_json = []
+              table_json = {}
+              connectionString = pymysql.connect(RDS_endpoint, user= UserName, passwd= Password, db= DatabaseName)
+              pointer = connectionString.cursor()
+              pointer2 = connectionString.cursor()
+              pointer.execute('SELECT * FROM students')
+              
+              pointer2.execute('DESCRIBE students')
+              #print(pointer2.fetchall())
+              
+              table_head = pointer2.fetchall()
+              for head in table_head:
+                  header.append(head[0])
+              #print(header)
+              
+              table_rows = pointer.fetchall()
+              #print(table_rows)
+              
+              for r in table_rows:
+                  row_json.append({header[0] : r[0], header[1] : r[1], header[2] : r[2]})
+              table_json = {"student" : row_json}
+              for r in table_rows:
+                  print("---------------------------------")
+                  print("Student Name : {}".format(r[0]))
+                  print("Course : {}".format(r[1]))
+                  print("Semester : {}".format(r[2]))
+                  print("---------------------------------")
+              
+              return table_json

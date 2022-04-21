@@ -1,0 +1,138 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=15&quest_id=35
+Resources:
+# https://marcelog.github.io/articles/get_aws_instance_id_ec2_read_metadata.html
+# https://stackoverflow.com/questions/1955505/parsing-json-with-unix-tools
+# https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/RootDeviceStorage.html
+
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: True
+          SubnetId: !Ref MyPubSubnet
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          echo "<html><h1> Welcome to Whizlabs Server 1 </h1><html>" >> /var/www/html/index.html
+          systemctl start httpd
+          systemctl enable httpd
+          inst_id=curl https://169.254.169.254/latest/meta-data/instance-id
+          # vol_id=aws ec2 describe-instances --instance-id $inst_id | jq -r '.BlockDeviceMappings[].Ebs.VolumeId'
+          # aws ec2 create-snapshot \
+            # --volume-id $vol_id \
+            # --description MyEC2Snapshot \
+            # --tag-specification ResourceType=snapshot,Tags=[{Key=Name,Value=MyEC2Snapshot}]
+          aws create-image \
+            --description MyEC2AMI \
+            --instance-id $inst_id\
+            --name MyEC2AMI \
+
+      Tags:
+        - Key: Name
+          Value: MyEC2Server
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MyEC2SecurityGroup
+      GroupDescription: My EC2 Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  MySecondEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315 #noclue how to get this
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - DeviceIndex: 1
+          AssociatePublicIpAddress: True
+          SubnetId: !Ref MyPubSubnet
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash -ex
+          sudo service httpd restart
+      Tags:
+        - Key: Name
+          Value: MyEC2AMIServer
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: MyVPC
+  MyPubSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.0.1.0/16
+      MapPublicIpOnLaunch: True
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: MyPublicSubnet
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  MyAttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: My Route Table
+  MyRTAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRT
+      SubnetId: !Ref MyPubSubnet
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyRT
+      GatewayId: !Ref MyIGW
+      DestinationCidrBlock: 0.0.0.0/0
+  #NatGateway
+  MyNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref MyPubSubnet
+      AllocationId: !GetAtt MyEIP.AllocationId
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  MyAssocEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MyEC2
+  MyAssoc2EIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MySecondEC2
+      # InstanceId:
+

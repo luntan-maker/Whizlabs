@@ -1,0 +1,51 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=176&quest_id=35
+Resources:
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Launch-template-SG
+      GroupDescription: Security group for Launch template
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  MyLT:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: whizlabsLC
+      LaunchTemplateData:
+        ImageId: ami-087c17d1fe0178315
+        InstanceType: t2.micro
+        KeyName: WhizKeyPair
+        NetworkInterfaces:
+          - Groups:
+            - !Ref MySG
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            sudo su
+            yum uptdate -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<html> <h1> Response coming from server </h1> </ html>" > /var/www/html/index.html
+  MyASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 2
+      MaxSize: 2
+      DesiredCapacity: 2
+      AutoScalingGroupName: Whiz-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLT
+        Version: '1'
+      VPCZoneIdentifier:
+        - subnet-b4d08ff9
+        - subnet-6bbe6c5a
+      Tags:
+        - Key: Name
+          Value: Whiz
+          PropagateAtLaunch: True
+
+

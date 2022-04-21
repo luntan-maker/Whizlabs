@@ -1,0 +1,28 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=17&quest_id=35
+Resources:
+  MyLT:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: ami-087c17d1fe0178315
+        InstanceType: t2.micro
+      LaunchTemplateName: whizlabsLT
+  MyAS:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MaxSize: 2
+      MinSize: 2
+      DesiredCapacity: 2
+      AutoScalingGroupName: whiz-ASG
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLT
+        Version: '1'
+      VPCZoneIdentifier:
+        - subnet-b4d08ff9
+        - subnet-6bbe6c5a
+      Tags:
+        - Key: Name
+          Value: ASG-EC2
+          PropagateAtLaunch: true
+      
+

@@ -1,0 +1,141 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=48&quest_id=35
+Resources:
+  MyFIFO:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: True
+      QueueName: MyWhizQueue.fifo
+      ContentBasedDeduplication: True
+  MyQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MyWhizQueue
+
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref MyPubSub
+      IamInstanceProfile: !Ref MyIP
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      UserData:
+        Fn::Base64: 
+          !Sub
+            - |
+              #!/bin/bash
+              aws sqs send-message \
+                --queue-url ${Fifo} \
+                --message-body "My first queue message" \
+                --message-deduplication-id id23 \
+                --message-group-id group123
+              aws sqs send-message \
+                --queue-url ${Fifo} \
+                --message-body "My second queue message" \
+                --message-deduplication-id id34 \
+                --message-group-id group234
+              aws sqs send-message \
+                --queue-url ${Fifo} \
+                --message-body "My third queue message" \
+                --message-deduplication-id id45 \
+                --message-group-id group345
+              aws sqs receive-message \
+                --queue-url ${Fifo}
+              
+              aws sqs send-message \
+                --queue-url ${Standard} \
+                --message-body "My first standard message queue"
+              aws sqs send-message \
+                --queue-url ${Standard} \
+                --message-body "My second standard message queue"
+              aws sqs send-message \
+                --queue-url ${Standard} \
+                --message-body "My third standard message queue"
+
+              echo "{'ReceiveMessageWatiTimeSeconds': '10'}" >> set-q-attr-1.json
+              aws sqs set-queue-attributes \
+                --queue-url ${Standard} \
+                --attributes file://set-q-attr-1.json
+              echo "{'VisibilityTimeout': '300'}" >> set-q-attr-2.json
+              aws sqs set-queue-attributes \
+                --queue-url ${Standard} \
+                --attributes file://set-q-attr-2.json
+              echo "{'DelaySeconds':'60'}" >> set-q-attr-3.json
+              aws sqs set-queue-attributes \
+                --queue-url ${Standard} \
+                --attributes file://set-q-attr-3.json
+              
+              aws sqs purge-queue \
+                --queue-url ${Standard}
+              aws sqs purge-queue \
+                --queue-url ${Fifo}
+            - Fifo : !Ref MyFIFO
+              Standard: !Ref MyQ
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+  MyPubSub:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: True
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  MyConnIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref MyIGW
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+      RouteTableId: !Ref MyRT
+  MyAssocRT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPubSub
+      RouteTableId: !Ref MyRT

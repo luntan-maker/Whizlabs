@@ -1,0 +1,79 @@
+Resources:
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: whizsource1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: FALSE
+        BlockPublicPolicy: FALSE
+        IgnorePublicAcls: FALSE
+        RestrictPublicBuckets: FALSE
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt MyRole.Arn
+        Rules:
+          - Destination: 
+              Bucket: !Ref DestinationBucket
+              # EncryptionConfiguration: 
+              StorageClass: ONEZONE_IA
+            Status: Enabled
+            SourceSelectionCriteria:
+              SseKmsEncryptedObjects:
+                Status: Enabled
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: whiztarget1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: FALSE
+        BlockPublicPolicy: FALSE
+        IgnorePublicAcls: FALSE
+        RestrictPublicBuckets: FALSE
+      VersioningConfiguration:
+        Status: Enabled
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+            Action:
+              - sts:AssumeRole
+  MyPol:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: s3access
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: '*'
+            Resource: '*'
+      Roles:
+        - !Ref MyRole
+  # MyKey:
+  #   Type: AWS::KMS::Key
+  #   Properties:
+  #     KeyPolicy:
+  #       Version: 2012-10-17
+  #       Statement:
+  #       - Effect: Allow
+  #         Principal:
+  #           AWS: !Sub
+  #             - arn:aws:iam::${Account}:root
+  #             - { Account: !Ref AWS::AccountId }
+  #         Action: kms:*
+  #         Resource: '*'
+  #     Enabled: TRUE
+  # MyAlias:
+  #   Type: AWS::KMS::Alias
+  #   Properties:
+  #     AliasName: 
+  #     TargetKeyId: 
+

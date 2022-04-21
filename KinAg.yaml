@@ -1,0 +1,99 @@
+# https://www.whizlabs.com/aws-solutions-architect-associate/
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=276&quest_id=35
+Resources:
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonKinesisFullAccess
+      Tags:
+        - Key: Name
+          Value: kiensis-datastream-role
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref MyIP
+      SecurityGroupIds:
+        - !Ref MySG
+      UserData: 
+        Fn::Base64: |
+          #!/bin/bash
+          sudo -s
+          yum update -y
+          sudo amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+          sudo yum install -y httpd mariadb-server
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          cd  /var/www/html
+          sudo wget https://www.free-css.com/assets/files/free-css-templates/download/page270/marvel.zip
+          sudo unzip marvel.zip
+          cd
+          sudo groupadd httpd
+          sudo usermod -a -G httpd ec2-user
+          sudo chown -R root:httpd /var/log/httpd
+          sudo chmod 2775 /var/log/httpd
+          find /var/log/httpd -type d -exec sudo chmod 2775 {} +
+      Tags:
+        - Key: Name
+          Value: demo_instance
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: GroupDescription
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  
+  MyStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: whiz-data-stream
+      ShardCount: 1
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: whiz-demo-logs814801234
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: True
+            ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  MyHose:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: whiz-delivery-stream
+      KinesisStreamSourceConfiguration:
+        KinesisStreamARN: !Ref MyStream
+        RoleARN: !GetAtt MyRole.Arn
+      S3DestinationConfiguration:
+        BucketARN: !Ref MyBucket
+        RoleARN: !GetAtt MyRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+

@@ -1,0 +1,69 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=69&quest_id=35
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: s3multipart-final-2      
+  
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2S3Role
+      Description: IAM Role to access S3 from EC2
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/S3FullAccess
+      Tags:
+        - Key: Name
+          Value: EC2-S3-fullAccess
+
+  MyIP:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MyRole
+
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref MyIP
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          mkdir /home/ec2-user/whizlabs/
+          aws s3 cp s3://labtask69/video.mp4 /hom/ec2-user/whizlabs/
+          sudo -s
+          ls
+          cd whizlabs/
+          ls -l
+          split -b 40M video.mp4
+          ls -lh
+          aws s3api create-multipart-upload --bucket s3multipart-final-2 --key video.mp4
+          # aws s3api upload-part --bucket s3multipart-final-2 --key video.mp4 --part-number 1 --body
+      Tags:
+        - Key: Name
+          Value: Multipart_Server
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0

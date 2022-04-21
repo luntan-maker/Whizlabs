@@ -1,0 +1,110 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=11&quest_id=35
+Resources:
+  MyEC2First:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds: 
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          SubnetId: subnet-b4d08ff9
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          echo "<html><h1> Welcome to Whizlabs Server 1 </h1><html>" > /var/www/html/index.html
+          systemctl start httpd
+          systemctl enable httpd
+      Tags:
+        - Key: Name
+          Value: MyEC2Server1
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: MySG
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  MyEC2Second:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: True
+          DeviceIndex: "1"
+          SubnetId: subnet-6bbe6c5a
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          echo "<html><h1> Welcome to Whizlabs Server 2 </h1><html>" > /var/www/html/index.html
+          systemctl start httpd
+          systemctl enable httpd
+      Tags:
+        - Key: Name
+          Value: MyEC2Server2
+  MyELB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Name: MyLoadBalancer
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SubnetMappings:
+        - SubnetId: subnet-6bbe6c5a
+        - SubnetId: subnet-b4d08ff9
+      SecurityGroups:
+        - !GetAtt MySG.GroupId
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTarget
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref MyTarget
+      LoadBalancerArn: !Ref MyELB
+      Port: 80
+      Protocol: HTTP
+  MyTarget:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: instance
+      Name: MyTargetGroup
+      HealthCheckEnabled: True
+      HealthCheckPort: 80
+      HealthCheckPath: /
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 6
+      Matcher:
+        HttpCode: 200
+      Targets:
+        - Id: !Ref MyEC2First
+        - Id: !Ref MyEC2Second
+
+
+

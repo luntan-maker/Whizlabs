@@ -1,0 +1,123 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=26&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: True
+          SubnetId: !Ref PubSub
+          DeviceIndex: 0
+      Tags:
+        - Key: Name
+          Value: MyPublicServer
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum install mysql -y
+          mysql - mydbinstance.cdegnvsebaim.us-east-1.rds.amazonaws.com -P 3306 -u rdsuser -p whizlabs123
+          CREATE DATABASE SchoolDB;
+          show databases;
+          use SchoolDB;
+          CREATE TABLE IF NOT EXISTS subjects (
+            subject_id INT AUTO_INCREMENT,
+              subject_name VARCHAR(255) NTO NULL,
+              teacher VARCHAR(255),
+              start_date DATE,
+              lesson TEXT,
+              PRIMARY KEY (subject_id)
+          ) ENGINE=INNODB;
+          show tables;
+          INSERT INTO subjects(subject_name, teacher) VALUES ('English', 'John Taylor');
+          INSERT INTO subjects(subject_name, teacher) VALUES ('Science', 'Mary Smith');
+          INSERT INTO subjects(subject_name, teacher) VALUES ('Maths', 'Ted Miller');
+          INSERT INTO subjects(subject_name, teacher) VALUES ('Arts', 'Suzan Carpenter');
+          select * from subjects;
+          exit;
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: PublicEC2_SG
+      GroupDescription: PublicEC2_SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: mysql
+      DBInstanceIdentifier: mydbinstance
+      MasterUsername: rdsuser
+      MasterUserPassword: whizlabs123
+      DBInstanceClass: db.t2.micro
+      StorageType: gp2
+      PubliclyAccessible: False
+      VPCSecurityGroups:
+        - !Ref MySG
+      DBName: mydbinstance
+
+  #VPC
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+  #Subnet
+  PubSub:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref MyVPC
+  #NAT
+  MyNat:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PubSub
+      AllocationId: !Ref MyEIP
+  #InternetGateway
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  InternetConnection: 
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref MyIGW
+  #EIP
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  #RouteTable
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+  MySub2RT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRT
+      SubnetId: !Ref PubSub
+  #Route
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW

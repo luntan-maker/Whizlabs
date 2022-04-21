@@ -1,0 +1,81 @@
+# https://www.youtube.com/watch?v=K5d2VdByohs&ab_channel=AmazonWebServices
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=28&quest_id=35
+# https://github.com/aws-samples/amazon-ec2-image-builder-samples/blob/master/CloudFormation/Linux/amazon-linux-2-with-latest-ssm-agent/amazon-linux-2-with-latest-ssm-agent.yml
+
+Resources:
+  # MyRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+      # EC2InstanceProfileForImageBuilder
+      # AmazonSSMManagedInstanceCore
+  
+  MyPipe:
+    Type: AWS::ImageBuilder::ImagePipeline
+    Properties:
+      InfrastructureConfigurationArn: !Ref MyConfig
+      ImageRecipeArn: !Ref MyIMGRec
+      Name: MyPipe
+      # Schedule: https://docs.aws.amazon.com/imagebuilder/latest/userguide/cron-expressions.html
+
+
+  
+  MyConfig:
+    Type: AWS::ImageBuilder::InfrastructureConfiguration
+    Properties:
+      InstanceProfileName: instance-profile-name
+      Name: MyConfig
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+  
+  MyIMGRec:
+    Type: AWS::ImageBuilder::ImageRecipe
+    Properties:
+      Components:
+        - ComponentArn: !Ref MyComp
+      Name: MyImageRecipe
+      ParentImage: ami-087c17d1fe0178315
+      Version: '1'
+
+  MyComp:
+    Type: AWS::ImageBuilder::Component
+    Properties:
+      Name: MyComponent
+      Platform: Linux
+      Version: '1'
+      Data: |
+        name: Testing image builder - InlineData
+        description: See above
+        schemaVersion: 1.0
+
+        Phases:
+          - name: build
+            steps:
+              - name: ExecuteScript
+                action: ExecuteBash
+                inputs:
+                  commands:
+                  - #!/bin/bash
+                  - sudo su
+                  - yum update -y
+                  - yum install httpd -y
+                  - echo "<html><h1> Welcome to Whizlabs </h1><html>" >> /var/www/html/index.html
+                  - systemctl start httpd
+                  - systemctl enable httpd
+
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: MySG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:  0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0

@@ -1,0 +1,96 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=41&quest_id=35
+Resources:
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref MyPublicSubnet
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      Tags:
+        - Key: Name
+          Value: EC2 instance for Volume resize lab
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          vol_id=aws ec2 describe-volume | jq -r '.Volumes[].Attachments[].VolumeId'
+          aws ec2 modify-volume \
+            --volume-id $vol_id \
+            --size 20
+          growpart /dev/xvda 1
+          resize2fs /dev/xvda1
+          # xfs_growfs /dev/xvda1
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EBS Volume Resize Security Group
+      GroupName: EBS Volume Resize Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  # Networking
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: MyVPC
+  MyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: True
+      VpcId: !Ref MyVPC
+
+  MyRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+  MyAssocRT:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRT
+      SubnetId: !Ref MyPublicSubnet
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref MyRT
+      GatewayId: !Ref MyIGW
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  MyInternetConn:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVPC
+  MyNAT:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      SubnetId: !Ref MyPublicSubnet
+  MyEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc 
+  MyAssocEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MyEIP.AllocationId
+      InstanceId: !Ref MyEC2
+  MyNACL:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref MyVPC
+  MyAssocNACL:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      NetworkAclId: !Ref MyNACL
+      SubnetId: !Ref MyPublicSubnet

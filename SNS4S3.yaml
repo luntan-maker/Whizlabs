@@ -1,0 +1,48 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=32&quest_id=35
+Resources:
+  MyBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: mys3buckettestingsns-myname
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Topic: !Ref MyTopic
+            Event: s3:ObjectCreated:Put
+  MyTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: mysnsnotification
+      TopicName: mysnsnotification
+  MySub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: myemail@gmail.com
+      TopicArn: !Ref MyTopic
+  MyPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 
+              - SNS:GetTopicAttributes
+                SNS:SetTopicAttributes
+                SNS:AddPermission
+                SNS:RemovePermission
+                SNS:DeleteTopic
+                SNS:Subscribe
+                SNS:ListSubscriptionsByTopic
+                SNS:Publish
+                SNS:Recieve
+
+            Resource: !Ref MyTopic
+            Condition:
+              ArnLike: 
+                aws:SourceArn: !Ref MyBucket
+      Topics:
+        - !Ref MyTopic

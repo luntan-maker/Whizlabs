@@ -1,0 +1,224 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=42&quest_id=35
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+  MyBast:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt MySG.GroupId
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref PubSub
+          AssociatePublicIpAddress: True
+      Tags:
+        - Key: Name
+          Value: Bastion-Server
+  MySG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Bastion-SG
+      GroupDescription: SecurityGroup for Bastion-server
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 22
+          FromPort: 22
+          CidrIp: 0.0.0.0/0
+  MyLBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: LB-SG
+      GroupDescription: LB-SG
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          ToPort: 80
+          FromPort: 80
+          CidrIp: 0.0.0.0/0
+  WS1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref PrivSub1
+      SecurityGroupIds:
+        - !GetAtt WSG.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install httpd -y
+          systemctl start httpd
+          systemctl enable httpd
+          echo "REQUEST HANDLING BY SERVER 1" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: Web-server-1
+  WSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: web-server-SG
+      GroupDescription: Security group for web servers
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupName: Bastion-SG
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupName: LB-SG
+  WS2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-087c17d1fe0178315
+      InstanceType: t2.micro
+      SubnetId: !Ref PrivSub2
+      SecurityGroupIds:
+        - !GetAtt WSG.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum uptdate -y
+          yum install httpd -y
+          systemctl start httpd
+          systemctl enable httpd
+          echo "REQUEST HANDLING BY SERVER 2" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: Web-server-2
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: True
+      TargetType: instance
+      Name: web-app-TG
+      Protocol: HTTP
+      Port: 80
+      VpcId: !Ref MyVPC
+      HealthCheckPath: /index.html
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 6
+      Matcher:
+        HttpCode: 200
+      Targets:
+        - Id: !Ref WS1
+        - Id: !Ref WS2
+  MyLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Web-application-LB
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PubSub
+        - sn-asdkfj
+      SecurityGroups:
+        - !Ref MyLBSG
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      LoadBalancerArn: !Ref MyLB
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # LoadBalancer
+
+
+  PubSub:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: us-east-1a
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: True
+
+  PrivSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: us-east-1b
+      CidrBlock: 10.0.1.0/24
+
+  PrivSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      AvailabilityZone: us-east-1c
+      CidrBlock: 10.0.2.0/24
+  
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+  
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref MyIGW
+  
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+     VpcId: !Ref MyVPC
+  
+  PublicRoute:
+    DependsOn: GatewayToInternet
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+  
+  PubSubRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSub
+      RouteTableId: !Ref PublicRouteTable
+  
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    # DependsOn: NatPublicIP
+    Properties:
+      SubnetId: !Ref PubSub
+      AllocationId: !GetAtt NatPublicIP.AllocationId
+  
+  NatPublicIP:
+    Type: AWS::EC2::EIP
+    DependsOn: MyVPC
+    Properties:
+      Domain: vpc
+    
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+  
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+  
+  PrivSub1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSub1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivSub2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivSub2
+      RouteTableId: !Ref PrivateRouteTable

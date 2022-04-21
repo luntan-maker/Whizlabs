@@ -1,0 +1,80 @@
+# https://play.whizlabs.com/site/task_details?lab_type=1&task_id=18&quest_id=35
+Resources:
+  SourceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: mysourcebucket12345
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: mydestinationbucket12345
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !Ref MyLamb
+  MyPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: mypolicy
+      Roles:
+        - !Ref MyRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              - arn:aws:s3::mysourcebucket12345/*
+          - Effect: Allow
+            Action: 
+              - s3:PutObject
+            Resource:
+              - arn:aws:s3::mydestinationbucket12345/*
+  MyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: myrole1
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Tags:
+        - Key: Name
+          Value: myrole
+  MyLamb:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: mylabmdafunction
+      Runtime: nodejs12.x
+      Role: !Ref MyRole
+      Code:
+        ZipFile: |
+          var AWS = require("aws-sdk")
+          exports.handler = (event, context, callback) => {
+              var s3 = new AWS.S3();
+              var soruceBucket = "mysourcebucket12345"
+              var destinationBucket = "mydestinationbucket12345"
+              var objectKey = event.Records[0].s3.object.key;
+              var copySource = encodeURI(sourceBucket + "/" + objectKey);
+              var copyParams = { Bucket: destinationBucket, CopySource: copySource, Key: objectKey };
+
+              s3.copyObject(copyParams, function(err, data) {
+                if (err) {
+                  console.lob(err, err.stack);
+                } else {
+                  console.log("S3 object copy successful.");
+                }
+              });
+          };
+  MyEvent:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MyLamb
+      Principal: s3.amazonaws.com
